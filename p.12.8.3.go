@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"time"
@@ -12,6 +13,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	if err := os.Chmod("log.txt", 04444); err != nil {
+		fmt.Println(err)
+	}
+	writer := bufio.NewWriter(file)
 	defer file.Close()
 
 	lineNumber := 1
@@ -27,7 +32,7 @@ func main() {
 		}
 		s := fmt.Sprintf("%d %s %s\n", lineNumber, now.Format("2006-01-02 15:04:05"), Text)
 
-		file.WriteString(s)
+		writer.WriteString(s)
 
 		lineNumber++
 	}
