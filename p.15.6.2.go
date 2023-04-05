@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-// Функция, которая реверсирует массив
+// Реверсируем массив
 func reverseArray(arr []int) []int {
 	reversed := make([]int, len(arr))
 	for i, j := 0, len(arr)-1; i <= j; i, j = i+1, j-1 {
