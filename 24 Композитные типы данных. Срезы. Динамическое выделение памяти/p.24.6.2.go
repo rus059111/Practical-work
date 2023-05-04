@@ -29,30 +29,35 @@ import (
 )
 
 func parseTest(sentences []string, chars []rune) [][]int {
-	result := make([][]int, len(sentences))
-	for i, sentence := range sentences {
-		words := strings.Split(sentence, " ")
+	result := [][]int{}
+	for _, sentence := range sentences {
+		words := strings.Fields(sentence)
 		lastWord := words[len(words)-1]
-		lastWordRunes := []rune(lastWord)
-		row := make([]int, len(chars))
-		for j, char := range chars {
-			for k, r := range lastWordRunes {
-				if r == char {
-					row[j] = k
-					break
-				}
-			}
+		lastIndex := []int{}
+		for _, char := range chars {
+			index := lastIndexOfRune(lastWord, char)
+			lastIndex = append(lastIndex, index)
 		}
-		result[i] = row
+		result = append(result, lastIndex)
 	}
 	return result
+}
+
+func lastIndexOfRune(s string, r rune) int {
+	lastIndex := -1
+	for i, c := range s {
+		if c == r {
+			lastIndex = i
+		}
+	}
+	return lastIndex
 }
 
 func main() {
 	sentences := []string{"Hello world", "Hello Skillbox", "Привет Мир", "Привет Skillbox"}
 	chars := []rune{'H', 'E', 'L', 'П', 'М'}
 	result := parseTest(sentences, chars)
-	for j, char := range chars {
-		fmt.Printf("%c position %d\n", char, result[0][j])
+	for i := range result[0] {
+		fmt.Printf("%c position %d\n", chars[i], result[0][i])
 	}
 }
