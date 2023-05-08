@@ -46,7 +46,7 @@ func parseTest(sentences []string, chars []rune) [][]int {
 
 func main() {
 	sentences := []string{"Hello world", "Hello Skillbox", "Привет Мир", "Привет Skillbox"}
-	chars := []rune{'H', 'E', 'L', 'П', 'М'}
+	chars := []rune{'H', 'E', 'l', 'П', 'М'}
 	result := parseTest(sentences, chars)
 	/* 	for i := range result[0] {
 		fmt.Printf("%c position %d\n", chars[i], result[0][i])
