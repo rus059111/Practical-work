@@ -35,7 +35,8 @@ func parseTest(sentences []string, chars []rune) [][]int {
 		lastWord := words[len(words)-1]
 		lastIndex := []int{}
 		for _, char := range chars {
-			index := lastIndexOfRune(lastWord, char)
+			index := strings.IndexRune(lastWord, char)
+			//index := lastIndexOfRune(lastWord, char)
 			lastIndex = append(lastIndex, index)
 		}
 		result = append(result, lastIndex)
@@ -43,7 +44,7 @@ func parseTest(sentences []string, chars []rune) [][]int {
 	return result
 }
 
-func lastIndexOfRune(s string, r rune) int {
+/* func lastIndexOfRune(s string, r rune) int {
 	lastIndex := -1
 	for i, c := range s {
 		if c == r {
@@ -51,7 +52,7 @@ func lastIndexOfRune(s string, r rune) int {
 		}
 	}
 	return lastIndex
-}
+} */
 
 func main() {
 	sentences := []string{"Hello world", "Hello Skillbox", "Привет Мир", "Привет Skillbox"}
