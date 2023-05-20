@@ -45,6 +45,8 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"module_st/pkg/storage"
+	"module_st/pkg/student"
 	"os"
 )
 

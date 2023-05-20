@@ -1,5 +1,9 @@
 package storage
 
+import (
+	"module_st/pkg/student"
+)
+
 func Put(m map[string]*student.Student, s *student.Student) {
 	m[s.name] = s
 }
