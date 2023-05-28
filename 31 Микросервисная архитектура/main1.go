@@ -1,14 +1,16 @@
 package main
 
-//перед запусокм подключаем библиотеку go get -u github.com/go-chi/chi
-
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi"
+	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 )
 
 // User struct represents a user with name, age, and friends.
@@ -20,13 +22,16 @@ type User struct {
 }
 
 var (
-	users  map[int]User
-	nextID int
+	db *sql.DB
 )
 
 func main() {
-	users = make(map[int]User)
-	nextID = 1
+	var err error
+	db, err = sql.Open("postgres", "postgres://username:password@localhost/mydatabase?sslmode=disable")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
 	r := chi.NewRouter()
 
@@ -47,9 +52,13 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newUser.ID = nextID
-	users[nextID] = newUser
-	nextID++
+	statement := `INSERT INTO users (name, age) VALUES ($1, $2) RETURNING id`
+	row := db.QueryRow(statement, newUser.Name, newUser.Age)
+	err = row.Scan(&newUser.ID)
+	if err != nil {
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		return
+	}
 
 	response := struct {
 		ID     int    `json:"id"`
@@ -75,19 +84,32 @@ func makeFriendsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sourceUser, sourceExists := users[friendRequest.SourceID]
-	targetUser, targetExists := users[friendRequest.TargetID]
+	sourceUser, err := getUserByID(friendRequest.SourceID)
+	if err != nil {
+		http.Error(w, "Source user not found", http.StatusNotFound)
+		return
+	}
 
-	if !sourceExists || !targetExists {
-		http.Error(w, "User not found", http.StatusNotFound)
+	targetUser, err := getUserByID(friendRequest.TargetID)
+	if err != nil {
+		http.Error(w, "Target user not found", http.StatusNotFound)
 		return
 	}
 
 	sourceUser.Friends = append(sourceUser.Friends, targetUser.ID)
 	targetUser.Friends = append(targetUser.Friends, sourceUser.ID)
 
-	users[sourceUser.ID] = sourceUser
-	users[targetUser.ID] = targetUser
+	err = updateUser(sourceUser)
+	if err != nil {
+		http.Error(w, "Failed to update source user", http.StatusInternalServerError)
+		return
+	}
+
+	err = updateUser(targetUser)
+	if err != nil {
+		http.Error(w, "Failed to update target user", http.StatusInternalServerError)
+		return
+	}
 
 	response := struct {
 		Status string `json:"status"`
@@ -106,28 +128,17 @@ func deleteUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, exists := users[userID]
-	if !exists {
+	user, err := getUserByID(userID)
+	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	// Remove the user from friends' lists
-	for _, friendID := range user.Friends {
-		friend, friendExists := users[friendID]
-		if friendExists {
-			friendFriends := friend.Friends[:0]
-			for _, friendFriendID := range friend.Friends {
-				if friendFriendID != user.ID {
-					friendFriends = append(friendFriends, friendFriendID)
-				}
-			}
-			friend.Friends = friendFriends
-			users[friend.ID] = friend
-		}
+	err = deleteUser(user)
+	if err != nil {
+		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+		return
 	}
-
-	delete(users, userID)
 
 	response := struct {
 		Name   string `json:"name"`
@@ -148,18 +159,16 @@ func getFriendsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, exists := users[userID]
-	if !exists {
+	user, err := getUserByID(userID)
+	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	friends := make([]User, 0, len(user.Friends))
-	for _, friendID := range user.Friends {
-		friend, friendExists := users[friendID]
-		if friendExists {
-			friends = append(friends, friend)
-		}
+	friends, err := getUsersByIDs(user.Friends)
+	if err != nil {
+		http.Error(w, "Failed to retrieve friends", http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -183,14 +192,19 @@ func updateAgeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, exists := users[userID]
-	if !exists {
+	user, err := getUserByID(userID)
+	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
 	user.Age = updateAge.NewAge
-	users[userID] = user
+
+	err = updateUser(user)
+	if err != nil {
+		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		return
+	}
 
 	response := struct {
 		Status string `json:"status"`
@@ -200,4 +214,39 @@ func updateAgeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+func getUserByID(userID int) (User, error) {
+	statement := `SELECT id, name, age, friends FROM users WHERE id = $1`
+	row := db.QueryRow(statement, userID)
+	user := User{}
+	err := row.Scan(&user.ID, &user.Name, &user.Age, pq.Array(&user.Friends))
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+func getUsersByIDs(userIDs []int) ([]User, error) {
+	users := make([]User, 0, len(userIDs))
+	for _, userID := range userIDs {
+		user, err := getUserByID(userID)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func updateUser(user User) error {
+	statement := `UPDATE users SET name = $1, age = $2, friends = $3 WHERE id = $4`
+	_, err := db.Exec(statement, user.Name, user.Age, pq.Array(user.Friends), user.ID)
+	return err
+}
+
+func deleteUser(user User) error {
+	statement := `DELETE FROM users WHERE id = $1`
+	_, err := db.Exec(statement, user.ID)
+	return err
 }
